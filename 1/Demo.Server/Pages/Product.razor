@@ -1,0 +1,24 @@
+﻿@* @page "/Product"
+<button class="btn btn-primary" @onclick="@Save">Kaydet A</button>
+<h3>Ürün Bilgileri</h3>
+<h5>@ProductTitle </h5>
+<br />
+<br />
+
+<ProductDetail ProductName="Jant" OnClick="@Save"></ProductDetail>
+
+<h5>@SaveMessage</h5>
+
+@code {
+    public string ProductTitle { get; set; }
+    private string SaveMessage;
+    protected override async Task OnInitializedAsync()
+    {
+        ProductTitle = "Jant Dingil";
+    }
+
+    private void Save(MouseEventArgs e)
+    {
+        SaveMessage = "Kaydedildi";
+    }
+} *@

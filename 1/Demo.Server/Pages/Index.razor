@@ -1,0 +1,270 @@
+﻿@page "/"
+@using Microsoft.Data.SqlClient;
+@using System.Data;
+@using System.Text;
+<h1 class="text-center" style="font-weight: bold;font-family:Candara">ENVANTER STOK DURUMU</h1>
+<br />
+<br />
+<style>
+    .center-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    @@media screen and (max-width: 600px) {
+        body {
+            background-color:aliceblue;
+        }
+    }
+
+    @@media screen and (min-width: 601px) {
+        /* Ekran genişliği 601px ve daha büyükse */
+        .center-container {
+            flex-direction: row; /* Yatay yönlendirme */
+        }
+    }
+</style>
+
+@if (Step == 1)
+{
+    <div class="center-container">
+        <button class="btn btn-default" style="background-color: deepskyblue;font-size:25px;font-family:Candara"
+                type="button"
+                @onclick="(() => ShowScanBarcode = !ShowScanBarcode)">
+            OKUT
+        </button>
+    </div>
+    <hr />
+    @if (Pdf417 | DecodeAllFormats)
+    {
+        <b>Result:</b>
+        <br />
+        <pre>@BarCode</pre>
+    }
+    else if (DecodeContinuously)
+    {
+        <b>DecodeContinuously:</b>
+        <br />
+        <pre>@BarCode</pre>
+    }
+    else
+    {
+        <input type="text" class="form-control" style="min-width: 100px;"
+               @bind-value="BarCode"
+               placeholder="BarCode" />
+    }
+
+    @if (ShowScanBarcode)
+    {
+
+        <BarcodeReader ScanResult="ScanResult"
+                       Close="(()=>ShowScanBarcode=!ShowScanBarcode)"
+                       ScanBtnTitle="Scan"
+                       ResetBtnTitle="Reset"
+                       CloseBtnTitle="Close"
+                       Pdf417Only="Pdf417"
+                       Decodeonce="!DecodeContinuously"
+                       DecodeAllFormats="DecodeAllFormats"
+                       SelectDeviceBtnTitle="Select Device" />
+
+    }
+    <hr />
+    <div class="center-container">
+        <button @onclick=@(()=>{Step=2;StateHasChanged();}) class="btn btn-default"
+                type="button" style="background-color:darkslateblue;color:white;font-size:25px;font-family:Candara">
+            Ürüne Git
+        </button>
+    </div>
+    <br />
+    <br />
+
+    <p style="color:red">@message</p>
+
+    <BarCodes @ref="barCodes" OnQRCodeGen="OnResult" OnDecodeFromImage="OnResult" OnError="OnError" QRCodeWidth="200"
+              Options="options" />
+
+    @if (ShowScanBarcodeCustom)
+    {
+        <BarcodeReader ScanResult="((e) => { BarCodeCustom=e; ShowScanBarcodeCustom = !ShowScanBarcodeCustom; })"
+                       Close="(()=>ShowScanBarcodeCustom=!ShowScanBarcodeCustom)"
+                       OnError="OnError"
+                       UseBuiltinDiv="false"
+                       @ref="barcodeReaderCustom" />
+
+        <div @ref="barcodeReaderCustom.Element">
+            <div style="width: 75vw; max-width: 260px;">
+                <div>
+                    <video id="video" playsinline autoplay style="width:70vw;max-width:250px;height:200px;border: 1px solid red"></video>
+                </div>
+                <div data-action="sourceSelectPanel" style="display:none">
+                    <label for="sourceSelect">SelectDevice:</label><span class="text-dark" data-action="result"></span>
+                    <select data-action="sourceSelect" style="max-width:100%" class="form-control">
+                    </select>
+                </div>
+                <button class="btn btn-outline-success p-2 m-1 w-20" data-action="startButton">Scan</button>
+                <button class="btn btn-outline-success p-2 m-1 w-20" data-action="resetButton">Reset</button>
+                <button class="btn btn-outline-success p-2 m-1 w-20" @onclick="(async ()=>await barcodeReaderCustom.Reload())">Reload</button>
+                <button type="button" class="btn btn-outline-success p-2 m-1 w-20" data-action="closeButton">Close</button>
+
+            </div>
+        </div>
+
+
+    }
+    <br />
+}
+@if (Step == 2)
+{
+    <h2 style="font-weight: bold;color:navy;text-align:center;font-family:Candara">Ürün Bilgileri</h2>
+    <hr />
+    <h4 style="font-family:Candara">Ürün Adı: @x</h4>
+    <h4 style="font-family:Candara">Depo Adı: @y</h4>
+    <h4 style="font-family:Candara">Stok Miktarı: @z</h4>
+    <hr />
+    <div class="center-container">
+    <button @onclick=@(()=>{Step=1;StateHasChanged();}) class="btn btn-default" style="background-color:darkslateblue;color:white;font-family:Candara">Geri Dön</button>
+    </div>
+}
+
+@code {
+
+    BarCodes barCodes;
+    short Step = 1;
+    string x;
+    string y;
+    string z;
+    /// <summary>
+    /// Display the scan code interface
+    /// </summary>
+    bool ShowScanBarcode { get; set; } = false;
+
+    /// <summary>
+    /// BarCode
+    /// </summary>
+    public string? BarCode { get; set; }
+
+    public bool Pdf417 { get; set; }
+    public bool DecodeContinuously { get; set; }
+    public bool DecodeAllFormats { get; set; }
+
+    private string Incele0;
+
+    private string message;
+
+    public SqlConnection sqlConnection;
+    public SqlDataAdapter dataAdapter;
+    public DataSet dataSet;
+    public string connectionString = @"Server=ESLEMMEGRELI;Database=SentezLive;User Id=sa;Password=Eslem123;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False;";
+
+    private Task OnError(string message)
+    {
+        this.message = message;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+    bool ProductDetails;
+
+    //Barkod okuyan method
+    private void ScanResult(string e)
+    {
+        try
+        {
+            sqlConnection = new SqlConnection(connectionString);
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine("select");
+            sb.AppendLine("(select top 1 i.InventoryName from Erp_Inventory i where i.RecId=it.InventoryId) as InventoryName,");
+            sb.AppendLine("(select top 1 w.WarehouseName from Erp_Warehouse w where w.RecId=it.WarehouseId) as WarehouseName,");
+            sb.AppendLine("sum(it.ActualStock) as ActualStock");
+            sb.AppendLine("from Erp_InventoryTotal it");
+            sb.AppendLine($"where it.InventoryId in (select RecId from Erp_Inventory where  InventoryCode = '{e}' and CompanyId = 3)");
+            sb.AppendLine("and it.TotalDate is not null");
+            sb.AppendLine("group by it.InventoryId,it.WarehouseId");
+            dataAdapter = new SqlDataAdapter(sb.ToString(), sqlConnection);
+            dataSet = new DataSet();
+            dataAdapter.Fill(dataSet, "Erp_InventoryTotal");
+            DataRow dRow = dataSet.Tables["Erp_InventoryTotal"].Select("").FirstOrDefault();
+            if (dRow != null && dRow["InventoryName"] != null && !string.IsNullOrEmpty(dRow["InventoryName"].ToString()))
+            {
+                x = dRow["InventoryName"].ToString();
+            }
+            if (dRow != null && dRow["WarehouseName"] != null && !string.IsNullOrEmpty(dRow["WarehouseName"].ToString()))
+            {
+                y = dRow["WarehouseName"].ToString();
+            }
+            if (dRow != null && dRow["ActualStock"] != null && !string.IsNullOrEmpty(dRow["ActualStock"].ToString()))
+            {
+                z = dRow["ActualStock"].ToString();
+            }
+            if (!DecodeContinuously)
+            {
+                BarCode = e;
+                ShowScanBarcode = !ShowScanBarcode;
+            }
+            else
+            {
+                if (BarCode.Length > 200) BarCode = "";
+                BarCode += e + Environment.NewLine;
+            }
+        }
+
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+    #region Custom
+
+    /// <summary>
+    /// Display the Custom scan code interface
+    /// </summary>
+    bool ShowScanBarcodeCustom { get; set; } = false;
+
+    /// <summary>
+    /// BarCodeCustom
+    /// </summary>
+    public string? BarCodeCustom { get; set; }
+
+    BarcodeReader barcodeReaderCustom;
+
+    #endregion
+
+
+    string? ver { get; set; }
+    string? build { get; set; }
+
+
+    Version? version { get; set; } = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await base.OnInitializedAsync();
+
+            ver = $"Ver {version?.Major}.{version?.Minor}.{version?.Build}";
+            build = "Build:" + File.GetLastWriteTime(Path.Combine(Directory.GetCurrentDirectory(), "Demo.Server.dll")).ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+    private ZXingOptions options = new ZXingOptions() { TRY_HARDER = true };
+
+    private Task OnResult(string message)
+    {
+        this.BarCode = message;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task DecodeFromImage()
+    {
+        this.BarCode = "";
+        this.message = "";
+        await barCodes!.DecodeFromImage();
+    }
+}
